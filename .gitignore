@@ -1,0 +1,57 @@
+# inbox
+/inbox/*
+!/inbox/.gitkeep
+!/inbox/assets/
+/inbox/assets/*
+!/inbox/assets/.gitkeep
+
+# Agents
+.antigravitycli/
+.opencode/
+.claude/
+
+# temp
+/temp/*
+!/temp/.gitkeep
+
+# Obsidian
+## configs and cache
+/.obsidian/workspace.json
+/.obsidian/workspace-mobile.json
+/.obsidian/graph.json
+/.obsidian/cache/
+/.trash
+## plugins
+/Excalidraw
+/Clippings
+
+### IDEs
+.idea*/
+.vscode*/
+
+### Environments
+.env
+.env.*
+!.env.example
+
+# Clouds
+.stfolder/
+.stversions/
+.stignore
+.syncthing.*.tmp
+~syncthing~*.tmp
+*sync-conflict*
+*conflicted*
+
+# OS
+*.tmp
+*.swp
+*.swo
+.cache
+.DS_Store
+Thumbs.db
+.thumbnails
+
+### Logs
+*.log
+logs/

@@ -1,0 +1,316 @@
+import os
+import re
+import json
+import sys
+import argparse
+
+def parse_yaml_frontmatter(content):
+    frontmatter = {}
+    match = re.match(r"^---\s*\n(.*?)\n---\s*\n", content, re.DOTALL)
+    if not match:
+        return frontmatter, content
+    
+    yaml_text = match.group(1)
+    body_text = content[match.end():]
+    
+    current_key = None
+    list_accumulator = []
+    
+    for line in yaml_text.splitlines():
+        if not line.strip():
+            continue
+        # Check if it is a list item
+        list_match = re.match(r"^\s*-\s*\"?(.*?)\"?\s*$", line)
+        if list_match and current_key is not None:
+            list_accumulator.append(list_match.group(1))
+            continue
+        
+        # If we hit a new key, save the accumulated list to the previous key if there is one
+        if list_match:
+            continue
+            
+        key_match = re.match(r"^\s*(\w+):\s*\"?(.*?)\"?\s*$", line)
+        if key_match:
+            if current_key is not None:
+                if list_accumulator:
+                    frontmatter[current_key] = list_accumulator
+                list_accumulator = []
+            
+            current_key = key_match.group(1)
+            val = key_match.group(2).strip()
+            if val:
+                frontmatter[current_key] = val
+            else:
+                frontmatter[current_key] = []
+                
+    if current_key is not None and list_accumulator:
+        frontmatter[current_key] = list_accumulator
+        
+    return frontmatter, body_text
+
+
+
+def main():
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    default_repo_root = os.path.abspath(os.path.join(script_dir, "../../../../"))
+
+    parser = argparse.ArgumentParser(description="Linter for LLM Wiki")
+    parser.add_argument("--repo-root", default=default_repo_root, help="Path to the repository root")
+    args = parser.parse_args()
+
+    repo_root = args.repo_root
+    wiki_dir = os.path.join(repo_root, "wiki")
+    raw_dir = os.path.join(repo_root, "raw")
+    index_path = os.path.join(wiki_dir, "index.md")
+
+    if not os.path.exists(wiki_dir):
+        print(f"Error: wiki directory not found at {wiki_dir}", file=sys.stderr)
+        sys.exit(1)
+
+    # 1. Gather all wiki files
+    categories = ["concepts", "entities", "archives"]
+    wiki_files = {}
+    for cat in categories:
+        cat_dir = os.path.join(wiki_dir, cat)
+        if os.path.exists(cat_dir):
+            for f in os.listdir(cat_dir):
+                if f.endswith(".md") and f != ".gitkeep":
+                    rel_p = os.path.join(cat, f)
+                    wiki_files[rel_p] = {
+                        "filename": f,
+                        "category": cat,
+                        "rel_path": rel_p,
+                        "abs_path": os.path.join(cat_dir, f)
+                    }
+
+    # 2. Gather all raw markdown files
+    raw_files = {}
+    for root, dirs, files in os.walk(raw_dir):
+        if "assets" in root:
+            continue
+        for f in files:
+            if f.endswith(".md") and f != ".gitkeep":
+                abs_p = os.path.join(root, f)
+                rel_p = os.path.relpath(abs_p, raw_dir)
+                raw_files[rel_p] = {
+                    "filename": f,
+                    "rel_path": rel_p,
+                    "abs_path": abs_p
+                }
+
+    # Parse each wiki file
+    parsed_wiki = {}
+    all_links = [] # entries: (source_file, target_path, is_source_yaml, line_no, raw_text)
+    
+    for rel_path, info in wiki_files.items():
+        with open(info["abs_path"], "r", encoding="utf-8") as f:
+            content = f.read()
+        
+        frontmatter, body = parse_yaml_frontmatter(content)
+        parsed_wiki[info["rel_path"]] = {
+            "frontmatter": frontmatter,
+            "body": body,
+            "abs_path": info["abs_path"],
+            "title": frontmatter.get("title", info["filename"]),
+            "updated": frontmatter.get("updated", "YYYY-MM-DD"),
+            "category": info["category"]
+        }
+        
+        # Check source/wiki in YAML
+        yaml_sources = frontmatter.get("sources", [])
+        if not isinstance(yaml_sources, list):
+            yaml_sources = [yaml_sources]
+        for src in yaml_sources:
+            all_links.append({
+                "source_file": info["rel_path"],
+                "target": src,
+                "is_yaml_source": True,
+                "line": None,
+                "raw_text": src
+            })
+            
+        yaml_wiki = frontmatter.get("wiki", [])
+        if not isinstance(yaml_wiki, list):
+            yaml_wiki = [yaml_wiki]
+        for w in yaml_wiki:
+            all_links.append({
+                "source_file": info["rel_path"],
+                "target": w,
+                "is_yaml_wiki": True,
+                "line": None,
+                "raw_text": w
+            })
+            
+        # Check markdown links in body
+        lines = content.splitlines()
+        for idx, line in enumerate(lines):
+            matches = re.finditer(r"!?\[(.*?)\]\((.*?)\)", line)
+            for m in matches:
+                target = m.group(2)
+                # Ignore absolute web URLs and anchors
+                if target.startswith("http://") or target.startswith("https://") or target.startswith("#") or target.startswith("mailto:"):
+                    continue
+                all_links.append({
+                    "source_file": info["rel_path"],
+                    "target": target,
+                    "is_yaml_source": False,
+                    "is_yaml_wiki": False,
+                    "line": idx + 1,
+                    "raw_text": m.group(0)
+                })
+
+    # Read index.md
+    if os.path.exists(index_path):
+        with open(index_path, "r", encoding="utf-8") as f:
+            index_content = f.read()
+    else:
+        index_content = ""
+
+    # Parse index links
+    index_links = []
+    for m in re.finditer(r"\[(.*?)\]\((.*?)\)", index_content):
+        index_links.append({
+            "text": m.group(1),
+            "target": m.group(2)
+        })
+
+    # 3. Analyze Index Consistency
+    index_errors = []
+    # For each wiki file, check if it is in the index
+    for rel_path, data in parsed_wiki.items():
+        found = False
+        for l in index_links:
+            if l["target"] == rel_path or l["target"] == "./" + rel_path:
+                found = True
+                break
+        if not found:
+            index_errors.append({
+                "type": "missing_in_index",
+                "file": rel_path,
+                "category": data["category"],
+                "title": data["title"],
+                "updated": data["updated"]
+            })
+
+    # Check if index has missing files
+    for l in index_links:
+        if l["target"].startswith("http://") or l["target"].startswith("https://"):
+            continue
+        target_path = l["target"].lstrip("./")
+        target_abs = os.path.abspath(os.path.join(wiki_dir, target_path))
+        if not os.path.exists(target_abs):
+            index_errors.append({
+                "type": "dangling_index_link",
+                "target": l["target"],
+                "text": l["text"]
+            })
+
+    # 4. Check all links
+    link_errors = []
+    autofixes = []
+    
+    for l in all_links:
+        src_dir = os.path.dirname(os.path.join(wiki_dir, l["source_file"]))
+        target_abs = os.path.abspath(os.path.join(src_dir, l["target"]))
+        
+        if not os.path.exists(target_abs):
+            filename = os.path.basename(l["target"])
+            is_raw = "raw" in l["target"] or l.get("is_yaml_source", False)
+            
+            if is_raw:
+                matches = []
+                for rf_rel, r_info in raw_files.items():
+                    if r_info["filename"] == filename:
+                        matches.append(r_info)
+                if len(matches) == 1:
+                    new_target = os.path.relpath(matches[0]["abs_path"], src_dir)
+                    autofixes.append({
+                        "file": l["source_file"],
+                        "old_target": l["target"],
+                        "new_target": new_target,
+                        "is_yaml": l.get("is_yaml_source", False),
+                        "line": l["line"],
+                        "raw_text": l["raw_text"]
+                    })
+                else:
+                    link_errors.append({
+                        "file": l["source_file"],
+                        "target": l["target"],
+                        "line": l["line"],
+                        "matches_count": len(matches),
+                        "type": "broken_raw_source"
+                    })
+            else:
+                matches = []
+                for wf_rel, w_info in wiki_files.items():
+                    if w_info["filename"] == filename:
+                        matches.append(w_info)
+                if len(matches) == 1:
+                    new_target = os.path.relpath(matches[0]["abs_path"], src_dir)
+                    autofixes.append({
+                        "file": l["source_file"],
+                        "old_target": l["target"],
+                        "new_target": new_target,
+                        "is_yaml": l.get("is_yaml_wiki", False) or l.get("is_yaml_source", False),
+                        "line": l["line"],
+                        "raw_text": l["raw_text"]
+                    })
+                else:
+                    link_errors.append({
+                        "file": l["source_file"],
+                        "target": l["target"],
+                        "line": l["line"],
+                        "matches_count": len(matches),
+                        "type": "broken_internal_link"
+                    })
+
+    # 5. Check if all raw files are referenced
+    referenced_raw = set()
+    for l in all_links:
+        src_dir = os.path.dirname(os.path.join(wiki_dir, l["source_file"]))
+        target_abs = os.path.abspath(os.path.join(src_dir, l["target"]))
+        if os.path.exists(target_abs) and target_abs.startswith(raw_dir):
+            referenced_raw.add(os.path.normpath(target_abs))
+            
+    for f in autofixes:
+        src_dir = os.path.dirname(os.path.join(wiki_dir, f["file"]))
+        target_abs = os.path.abspath(os.path.join(src_dir, f["new_target"]))
+        if os.path.exists(target_abs) and target_abs.startswith(raw_dir):
+            referenced_raw.add(os.path.normpath(target_abs))
+
+    unreferenced_raw = []
+    for rf_rel, r_info in raw_files.items():
+        norm_p = os.path.normpath(r_info["abs_path"])
+        if norm_p not in referenced_raw:
+            unreferenced_raw.append(r_info["rel_path"])
+
+    # 6. Orphaned pages (pages not linked to by any other wiki page)
+    referenced_wiki = set()
+    for l in all_links:
+        if l.get("is_yaml_source") or l.get("is_yaml_wiki"):
+            continue
+        src_dir = os.path.dirname(os.path.join(wiki_dir, l["source_file"]))
+        target_abs = os.path.abspath(os.path.join(src_dir, l["target"]))
+        if os.path.exists(target_abs) and target_abs.startswith(wiki_dir):
+            rel = os.path.relpath(target_abs, wiki_dir)
+            if rel != "index.md" and rel != "log.md":
+                referenced_wiki.add(rel)
+
+    orphan_pages = []
+    for rel_path, data in parsed_wiki.items():
+        if rel_path not in referenced_wiki:
+            orphan_pages.append(rel_path)
+
+    # Output results
+    results = {
+        "index_errors": index_errors,
+        "link_errors": link_errors,
+        "autofixes": autofixes,
+        "unreferenced_raw": unreferenced_raw,
+        "orphan_pages": orphan_pages
+    }
+    
+    print(json.dumps(results, indent=2, ensure_ascii=False))
+
+if __name__ == "__main__":
+    main()
