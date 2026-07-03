@@ -1,6 +1,8 @@
 # LLM Wiki
 
-![Made in Ukraine](https://img.shields.io/badge/Made%20in-Ukraine-blue?logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAwIiBoZWlnaHQ9IjgwMCI%2BCjxyZWN0IHdpZHRoPSIxMjAwIiBoZWlnaHQ9IjgwMCIgZmlsbD0iIzAwNTdCNyIvPgo8cmVjdCB3aWR0aD0iMTIwMCIgaGVpZ2h0PSI0MDAiIHk9IjQwMCIgZmlsbD0iI0ZGRDcwMCIvPgo8L3N2Zz4%3D) ![GitHub License](https://img.shields.io/github/license/BogdanovychA/llm-wiki?logoColor=grey&color=blue)
+![Made in Ukraine](https://img.shields.io/badge/Made%20in-Ukraine-blue?logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAwIiBoZWlnaHQ9IjgwMCI%2BCjxyZWN0IHdpZHRoPSIxMjAwIiBoZWlnaHQ9IjgwMCIgZmlsbD0iIzAwNTdCNyIvPgo8cmVjdCB3aWR0aD0iMTIwMCIgaGVpZ2h0PSI0MDAiIHk9IjQwMCIgZmlsbD0iI0ZGRDcwMCIvPgo8L3N2Zz4%3D)
+
+[![DOI](https://zenodo.org/badge/1211130746.svg)](https://doi.org/10.5281/zenodo.19590690) ![GitHub License](https://img.shields.io/github/license/BogdanovychA/llm-wiki?logoColor=grey&color=blue)
 
 Персистентна (постійна) кумулятивна вікі-система, яка використовує агентів на базі LLM для імпорту, структурування, перехресного зв'язування та підтримки бази знань на основі нових джерел. Проєкт слугує шаблоном для створення персональних (або командних) баз знань під керуванням LLM із підтримкою лінтингу, запитів та каскадних оновлень.
 
