@@ -4,9 +4,9 @@ authors:
   - family-names: "Bogdanovych"
     given-names: "Andrii"
     orcid: "https://orcid.org/0009-0006-9045-5675"
-title: "llm-wiki"
-version: 0.1.0
+title: "LLM Wiki"
 abstract: "LLM Wiki is a persistent, cumulative wiki system that uses LLM agents to import, structure, cross-reference, and maintain a knowledge base from new source materials. The project serves as a template for building personal (or team) LLM-driven knowledge bases with support for linting, queries, and cascading updates."
 repository-code: "https://github.com/BogdanovychA/llm-wiki"
 license: MIT
-date-released: 2026-07-02
+version: 0.1.0
+date-released: 2026-07-03
