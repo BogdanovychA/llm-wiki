@@ -45,7 +45,7 @@ git clone https://github.com/BogdanovychA/llm-wiki
 
 ### Робота з агентом та команди
 
-Для взаємодії з вікі використовуйте LLM-агентів (наприклад: [OpenCode](https://opencode.ai/), [Antigravity](https://antigravity.google), [Claude Code](https://claude.com/product/claude-code) тощо). 
+Для взаємодії з вікі використовуйте LLM-агентів (наприклад: [OpenCode](https://opencode.ai/), [Antigravity](https://antigravity.google), [Claude Code](https://claude.com/product/claude-code) тощо).
 
 Залежно від завдання, давайте агенту такі вказівки:
 - **Імпортувати джерела (`ingest`)** *(виконується після їх додавання)*:
