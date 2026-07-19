@@ -1,6 +1,9 @@
 ---
 name: query
 description: Обробка запитів (Query Workflow) користувачів до персональної бази знань LLM Wiki. Пошук інформації в покажчику та сторінках вікі, синтез відповідей з посиланнями на джерела, архівація складних відповідей як нових сторінок у wiki/archives/ та оновлення покажчика й логу активності.
+metadata:
+  version: 0.1.0
+  repository: https://github.com/BogdanovychA/llm-wiki
 ---
 
 # Скіл обробки запитів вікі (Wiki Query Skill)

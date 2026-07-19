@@ -456,6 +456,47 @@ def main():
         if rel_path not in referenced_wiki:
             orphan_pages.append(rel_path)
 
+    # 7. Duplicate links within the same file
+    duplicate_links = []
+    for rel_path, data in parsed_wiki.items():
+        if data["category"] == "log":
+            continue
+        abs_path = data["abs_path"]
+        with open(abs_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        # Find where "Джерела та посилання" section starts
+        sources_start = len(lines)
+        for idx, line in enumerate(lines):
+            if re.match(r"^##\s+Джерела та посилання", line):
+                sources_start = idx
+                break
+        # Track body and sources targets separately
+        body_targets = {}
+        sources_targets = {}
+        for idx, line in enumerate(lines):
+            in_sources = idx >= sources_start
+            bucket = sources_targets if in_sources else body_targets
+            for m in re.finditer(r"!?\[(.*?)\]\((.*?)\)", line):
+                target = m.group(2)
+                if (
+                    target.startswith("http://")
+                    or target.startswith("https://")
+                    or target.startswith("#")
+                    or target.startswith("mailto:")
+                ):
+                    continue
+                bucket.setdefault(target, []).append(idx + 1)
+        # Find duplicates within sources section only
+        for target, line_nums in sources_targets.items():
+            if len(line_nums) > 1:
+                duplicate_links.append(
+                    {
+                        "file": rel_path,
+                        "target": target,
+                        "lines": line_nums,
+                    }
+                )
+
     # Output results
     results = {
         "index_errors": index_errors,
@@ -463,6 +504,7 @@ def main():
         "autofixes": autofixes,
         "unreferenced_raw": unreferenced_raw,
         "orphan_pages": orphan_pages,
+        "duplicate_links": duplicate_links,
     }
 
     print(json.dumps(results, indent=2, ensure_ascii=False))
