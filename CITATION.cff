@@ -9,5 +9,5 @@ abstract: "LLM Wiki is a persistent, cumulative wiki system that uses LLM agents
 repository-code: "https://github.com/BogdanovychA/llm-wiki"
 license: MIT
 doi: 10.5281/zenodo.21155394
-version: 0.1.0
-date-released: 2026-07-03
+version: 0.1.1
+date-released: 2026-07-20
