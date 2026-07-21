@@ -229,6 +229,11 @@ def main():
     for rel_path, info in wiki_files.items():
         collect_links(info["rel_path"], info["abs_path"], is_raw_doc=False)
 
+    # log.md — append-only лог, перевіряємо лише його посилання, не додаємо в parsed_wiki
+    log_abs = os.path.join(wiki_dir, "log.md")
+    if os.path.exists(log_abs):
+        collect_links("log.md", log_abs, is_raw_doc=False)
+
     for rel_path, info in raw_doc_files.items():
         # raw-документи додаємо під ключем, що вказує на їхнє розташування
         # відносно repo_root, щоб розв'язання шляхів працювало коректно.
@@ -308,6 +313,7 @@ def main():
         # --- Посилання бите, класифікуємо та намагаємося виправити ---
         filename = os.path.basename(link["target"])
         media = is_media_link(link["target"])
+        is_log = link["source_file"] == "log.md"
 
         if media:
             # Медіа: шукаємо файл за іменем у raw/assets/ (рекурсивно)
@@ -315,14 +321,16 @@ def main():
             if len(candidates) == 1:
                 new_target = os.path.relpath(candidates[0], src_dir)
                 # raw-документи архівні й незмінні → НЕ автофіксимо, лише звітуємо
-                if link.get("is_raw_doc", False):
+                if link.get("is_raw_doc", False) or is_log:
                     link_errors.append(
                         {
                             "file": link["source_file"],
                             "target": link["target"],
                             "line": link["line"],
                             "suggested": new_target,
-                            "type": "broken_raw_media",
+                            "type": "broken_log_media"
+                            if is_log
+                            else "broken_raw_media",
                         }
                     )
                 else:
@@ -343,7 +351,7 @@ def main():
                         "target": link["target"],
                         "line": link["line"],
                         "matches_count": len(candidates),
-                        "type": "broken_media",
+                        "type": "broken_log_media" if is_log else "broken_media",
                     }
                 )
             continue
@@ -359,14 +367,16 @@ def main():
             if len(matches) == 1:
                 new_target = os.path.relpath(matches[0]["abs_path"], src_dir)
                 # raw-документи архівні → не автофіксимо, лише звітуємо
-                if link.get("is_raw_doc", False):
+                if link.get("is_raw_doc", False) or is_log:
                     link_errors.append(
                         {
                             "file": link["source_file"],
                             "target": link["target"],
                             "line": link["line"],
                             "suggested": new_target,
-                            "type": "broken_raw_source",
+                            "type": "broken_log_source"
+                            if is_log
+                            else "broken_raw_source",
                         }
                     )
                 else:
@@ -387,7 +397,7 @@ def main():
                         "target": link["target"],
                         "line": link["line"],
                         "matches_count": len(matches),
-                        "type": "broken_raw_source",
+                        "type": "broken_log_source" if is_log else "broken_raw_source",
                     }
                 )
         else:
@@ -397,17 +407,28 @@ def main():
                     matches.append(w_info)
             if len(matches) == 1:
                 new_target = os.path.relpath(matches[0]["abs_path"], src_dir)
-                autofixes.append(
-                    {
-                        "file": link["source_file"],
-                        "old_target": link["target"],
-                        "new_target": new_target,
-                        "is_yaml": link.get("is_yaml_wiki", False)
-                        or link.get("is_yaml_source", False),
-                        "line": link["line"],
-                        "raw_text": link["raw_text"],
-                    }
-                )
+                if is_log:
+                    link_errors.append(
+                        {
+                            "file": link["source_file"],
+                            "target": link["target"],
+                            "line": link["line"],
+                            "suggested": new_target,
+                            "type": "broken_log_link",
+                        }
+                    )
+                else:
+                    autofixes.append(
+                        {
+                            "file": link["source_file"],
+                            "old_target": link["target"],
+                            "new_target": new_target,
+                            "is_yaml": link.get("is_yaml_wiki", False)
+                            or link.get("is_yaml_source", False),
+                            "line": link["line"],
+                            "raw_text": link["raw_text"],
+                        }
+                    )
             else:
                 link_errors.append(
                     {
@@ -415,13 +436,15 @@ def main():
                         "target": link["target"],
                         "line": link["line"],
                         "matches_count": len(matches),
-                        "type": "broken_internal_link",
+                        "type": "broken_log_link" if is_log else "broken_internal_link",
                     }
                 )
 
     # 5. Check if all raw files are referenced
     referenced_raw = set()
     for link in all_links:
+        if link["source_file"] == "log.md":
+            continue
         src_dir = os.path.dirname(link["source_abs"])
         target_abs = os.path.abspath(os.path.join(src_dir, link["target"]))
         if os.path.exists(target_abs) and target_abs.startswith(raw_dir):
@@ -443,6 +466,8 @@ def main():
     referenced_wiki = set()
     for link in all_links:
         if link.get("is_yaml_source") or link.get("is_yaml_wiki"):
+            continue
+        if link["source_file"] == "log.md":
             continue
         src_dir = os.path.dirname(link["source_abs"])
         target_abs = os.path.abspath(os.path.join(src_dir, link["target"]))
